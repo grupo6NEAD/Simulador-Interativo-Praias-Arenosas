@@ -2,10 +2,12 @@ from dash import Dash, dcc, html, Input, Output
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
+import os
 
 app = Dash(__name__)
 server = app.server
 
+# Tabela de pontuação combinada para tamanho do grão e inclinação
 grain_table = {
     ">710": {"1/5": 5, "1/10": 4, "1/20": 3, "1/25": 2, "1/50": 1},
     "500-710": {"1/5": 4, "1/10": 4, "1/20": 3, "1/25": 2, "1/50": 1},
@@ -26,22 +28,39 @@ def classificar_praia(escore):
     else:
         return "Muito Exposta"
 
+# Layout do aplicativo
 app.layout = html.Div([
     html.H1("Simulador Interativo: Classificação de Praias Arenosas"),
+
     html.Label("1. Ação de Ondas"),
     dcc.Slider(0, 5, step=1, value=0, marks={i: str(i) for i in range(6)}, id='wave'),
+
     html.Label("2. Zona de Arrebentação"),
     dcc.Slider(0, 5, step=1, value=0, marks={i: str(i) for i in range(6)}, id='breaker'),
+
     html.Label("3. % de Areia Fina"),
     dcc.Slider(0, 5, step=1, value=0, marks={i: str(i) for i in range(6)}, id='fine'),
+
     html.Label("4. Tamanho do Grão (mm)"),
     dcc.Dropdown(list(grain_table.keys()), "250-350", id='grain'),
+
     html.Label("4b. Inclinação da Praia"),
     dcc.Dropdown(list(slope_map.keys()), "1/20", id='slope'),
+
     html.Label("5. Profundidade da Camada Redox"),
     dcc.Slider(0, 5, step=1, value=0, marks={i: str(i) for i in range(6)}, id='redox'),
+
     html.Label("6. Organismos Tubícolas"),
-    dcc.Slider(0, 5, step=1, value=0, marks={i: str(i) for i in range(6)}, id='worms'),
+    dcc.RadioItems(
+        id='tubicola',
+        options=[
+            {'label': 'Presentes', 'value': 'Presentes'},
+            {'label': 'Ausentes', 'value': 'Ausentes'}
+        ],
+        value='Presentes',
+        labelStyle={'display': 'block'}
+    ),
+
     html.Div(id='output-div'),
     dcc.Graph(id='morpho-graph')
 ])
@@ -55,18 +74,21 @@ app.layout = html.Div([
     Input('grain', 'value'),
     Input('slope', 'value'),
     Input('redox', 'value'),
-    Input('worms', 'value')
+    Input('tubicola', 'value')
 )
-def update_output(wave, breaker, fine, grain, slope, redox, worms):
-    if None in (grain, slope):
+def update_output(wave, breaker, fine, grain, slope, redox, tubicola):
+    if None in (grain, slope, tubicola):
         return 'Carregando...', go.Figure()
+
     try:
         score4 = grain_table[grain][slope_map[slope]]
     except:
         score4 = 0
 
-    total = wave + breaker + fine + score4 + redox + worms
+    tubicola_score = 2 if tubicola == 'Ausentes' else 0
+    total = wave + breaker + fine + score4 + redox + tubicola_score
     tipo = classificar_praia(total)
+    total = min(total, 20)
 
     d_range = np.linspace(0.2, 1.0, 300)
     def curva_protegida(d): return 3.1 * d**-1.1
@@ -111,9 +133,8 @@ def update_output(wave, breaker, fine, grain, slope, redox, worms):
         yaxis=dict(range=[0, 1.0]),
         legend=dict(font=dict(size=12))
     )
-    return f"Escore Total: {total} → Tipo de Praia: {tipo}", fig
 
-import os
+    return f"Escore Total: {total} → Tipo de Praia: {tipo}", fig
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8050))
