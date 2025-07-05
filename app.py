@@ -28,18 +28,18 @@ def classificar_praia(escore):
     else:
         return "Muito Exposta"
 
-# Layout do aplicativo
+# Layout corrigido com sliders ajustados
 app.layout = html.Div([
     html.H1("Simulador Interativo: Classificação de Praias Arenosas"),
 
     html.Label("1. Ação de Ondas"),
-    dcc.Slider(0, 5, step=1, value=0, marks={i: str(i) for i in range(6)}, id='wave'),
+    dcc.Slider(0, 4, step=1, value=0, marks={i: str(i) for i in range(5)}, id='wave'),
 
     html.Label("2. Zona de Arrebentação"),
-    dcc.Slider(0, 5, step=1, value=0, marks={i: str(i) for i in range(6)}, id='breaker'),
+    dcc.Slider(0, 2, step=1, value=0, marks={i: str(i) for i in range(3)}, id='breaker'),
 
     html.Label("3. % de Areia Fina"),
-    dcc.Slider(0, 5, step=1, value=0, marks={i: str(i) for i in range(6)}, id='fine'),
+    dcc.Slider(0, 2, step=1, value=0, marks={i: str(i) for i in range(3)}, id='fine'),
 
     html.Label("4. Tamanho do Grão (mm)"),
     dcc.Dropdown(list(grain_table.keys()), "250-350", id='grain'),
@@ -48,7 +48,7 @@ app.layout = html.Div([
     dcc.Dropdown(list(slope_map.keys()), "1/20", id='slope'),
 
     html.Label("5. Profundidade da Camada Redox"),
-    dcc.Slider(0, 5, step=1, value=0, marks={i: str(i) for i in range(6)}, id='redox'),
+    dcc.Slider(0, 4, step=1, value=0, marks={i: str(i) for i in range(5)}, id='redox'),
 
     html.Label("6. Organismos Tubícolas"),
     dcc.RadioItems(
@@ -85,7 +85,7 @@ def update_output(wave, breaker, fine, grain, slope, redox, tubicola):
     except:
         score4 = 0
 
-    tubicola_score = 2 if tubicola == 'Ausentes' else 0
+    tubicola_score = 1 if tubicola == 'Ausentes' else 0
     total = wave + breaker + fine + score4 + redox + tubicola_score
     tipo = classificar_praia(total)
     total = min(total, 20)
