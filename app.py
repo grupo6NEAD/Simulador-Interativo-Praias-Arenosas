@@ -6,13 +6,14 @@ import os
 app = Dash(__name__)
 server = app.server
 
+# Corrigida a grain_table para escore de 0 a 7
 grain_table = {
-    ">710": {"1/5": 5, "1/10": 4, "1/20": 3, "1/25": 2, "1/50": 1},
-    "500-710": {"1/5": 4, "1/10": 4, "1/20": 3, "1/25": 2, "1/50": 1},
-    "350-500": {"1/5": 3, "1/10": 3, "1/20": 3, "1/25": 2, "1/50": 1},
-    "250-350": {"1/5": 2, "1/10": 2, "1/20": 2, "1/25": 2, "1/50": 1},
-    "180-250": {"1/5": 1, "1/10": 1, "1/20": 1, "1/25": 1, "1/50": 1},
-    "<180": {"1/5": 1, "1/10": 1, "1/20": 1, "1/25": 1, "1/50": 1},
+    ">710": {"1/5": 7, "1/10": 6, "1/20": 5, "1/25": 4, "1/50": 3},
+    "500-710": {"1/5": 6, "1/10": 5, "1/20": 4, "1/25": 3, "1/50": 2},
+    "350-500": {"1/5": 5, "1/10": 4, "1/20": 3, "1/25": 2, "1/50": 1},
+    "250-350": {"1/5": 4, "1/10": 3, "1/20": 2, "1/25": 1, "1/50": 0},
+    "180-250": {"1/5": 3, "1/10": 2, "1/20": 1, "1/25": 0, "1/50": 0},
+    "<180": {"1/5": 2, "1/10": 1, "1/20": 0, "1/25": 0, "1/50": 0},
 }
 
 slope_map = {"1/5": "1/5", "1/10": "1/10", "1/20": "1/20", "1/25": "1/25", "1/50": "1/50"}
@@ -52,39 +53,37 @@ redox_options = {
     4: ">80 cm"
 }
 
+# Adicionando espaçamento (marginBottom) entre os elementos
+def spaced_div(label, component):
+    return html.Div([html.Label(label), component], style={"marginBottom": "20px"})
+
 app.layout = html.Div([
     html.H1("Simulador Interativo: Classificação de Praias Arenosas"),
 
-    html.Label("1. Ação de Ondas"),
-    dcc.Slider(0, 4, step=1, value=0, marks=wave_action_options, id='wave'),
+    spaced_div("1. Ação de Ondas",
+               dcc.Slider(0, 4, step=1, value=0, marks=wave_action_options, id='wave')),
+    spaced_div("2. Zona de Arrebentação",
+               dcc.Slider(0, 2, step=1, value=0, marks=breaker_zone_options, id='breaker')),
+    spaced_div("3. % de Areia Fina",
+               dcc.Slider(0, 2, step=1, value=0, marks=fine_sand_options, id='fine')),
+    spaced_div("4. Tamanho do Grão (mm)",
+               dcc.Dropdown(list(grain_table.keys()), "250-350", id='grain')),
+    spaced_div("4b. Inclinação da Praia",
+               dcc.Dropdown(list(slope_map.keys()), "1/20", id='slope')),
+    spaced_div("5. Profundidade da Camada Redox",
+               dcc.Slider(0, 4, step=1, value=0, marks=redox_options, id='redox')),
+    spaced_div("6. Organismos Tubícolas",
+               dcc.RadioItems(
+                   id='tubicola',
+                   options=[
+                       {'label': 'Presentes', 'value': 'Presentes'},
+                       {'label': 'Ausentes', 'value': 'Ausentes'}
+                   ],
+                   value='Presentes',
+                   labelStyle={'display': 'block'}
+               )),
 
-    html.Label("2. Zona de Arrebentação"),
-    dcc.Slider(0, 2, step=1, value=0, marks=breaker_zone_options, id='breaker'),
-
-    html.Label("3. % de Areia Fina"),
-    dcc.Slider(0, 2, step=1, value=0, marks=fine_sand_options, id='fine'),
-
-    html.Label("4. Tamanho do Grão (mm)"),
-    dcc.Dropdown(list(grain_table.keys()), "250-350", id='grain'),
-
-    html.Label("4b. Inclinação da Praia"),
-    dcc.Dropdown(list(slope_map.keys()), "1/20", id='slope'),
-
-    html.Label("5. Profundidade da Camada Redox"),
-    dcc.Slider(0, 4, step=1, value=0, marks=redox_options, id='redox'),
-
-    html.Label("6. Organismos Tubícolas"),
-    dcc.RadioItems(
-        id='tubicola',
-        options=[
-            {'label': 'Presentes', 'value': 'Presentes'},
-            {'label': 'Ausentes', 'value': 'Ausentes'}
-        ],
-        value='Presentes',
-        labelStyle={'display': 'block'}
-    ),
-
-    html.Div(id='output-div'),
+    html.Div(id='output-div', style={"marginTop": "30px"}),
     dcc.Graph(id='morpho-graph')
 ])
 
