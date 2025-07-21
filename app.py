@@ -143,7 +143,7 @@ def update_output(wave, breaker, fine, grain, slope, redox, tubicola):
         xaxis_title="Inclinação da Praia (1:x)",
         yaxis_title="Diâmetro Médio do Grão (mm)",
         title="Classificação da Exposição de Praias Arenosas",
-        xaxis=dict(range=[0, 100]),
+        xaxis=dict(range=[5, 100]),
         yaxis=dict(range=[0, 1.0]),
         legend=dict(font=dict(size=12))
     )
