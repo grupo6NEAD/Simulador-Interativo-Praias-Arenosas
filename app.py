@@ -144,9 +144,9 @@ def update_output(wave, breaker, fine, grain, slope, redox, tubicola):
     d_range = np.linspace(0.1, 1.0, 300)
 
     curves = {
-        "Refletiva": {"func": lambda d: 3.1 * d**-1.1, "color": "#33C3F0", "formula": "x = 3,1·d⁻¹·¹"},
-        "Intermediária": {"func": lambda d: 2.1 * d**-1.8, "color": "#39E991", "formula": "x = 2,1·d⁻¹·⁸"},
-        "Dissipativa": {"func": lambda d: 3.9 * d**-1.85, "color": "#E95D39", "formula": "x = 3,9·d⁻¹·⁸⁵"}
+        "Protegida": {"func": lambda d: 3.1 * d**-1.1, "color": "#33C3F0", "formula": "x = 3,1·d⁻¹·¹"},
+        "Moderadamente Protegida": {"func": lambda d: 2.1 * d**-1.8, "color": "#39E991", "formula": "x = 2,1·d⁻¹·⁸"},
+        "Exposta": {"func": lambda d: 3.9 * d**-1.85, "color": "#E95D39", "formula": "x = 3,9·d⁻¹·⁸⁵"}
     }
 
     for name, props in curves.items():
