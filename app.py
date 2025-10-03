@@ -48,7 +48,8 @@ colors = {
     'text': '#EAEAEA',
     'container': '#2D2D2D',
     'accent': '#4491D3',
-    'border': '#444444'
+    'border': '#444444',
+    'slider_mark': '#CCCCCC'  # Cor para as legendas do slider
 }
 
 # Estilo para o container principal
@@ -82,11 +83,17 @@ app.layout = html.Div([
         html.Div([
             html.H3("Parâmetros de Entrada", style={"borderBottom": f"1px solid {colors['border']}", "paddingBottom": "10px"}),
             create_input_section("1. Ação de Ondas",
-                dcc.Slider(0, 4, step=1, value=0, marks=wave_action_options, id='wave')),
+                dcc.Slider(0, 4, step=1, value=0,
+                           marks={key: {'label': val, 'style': {'color': colors['slider_mark']}} for key, val in wave_action_options.items()},
+                           id='wave', style={'padding': '5px 20px 0'})),
             create_input_section("2. Zona de Arrebentação",
-                dcc.Slider(0, 2, step=1, value=0, marks=breaker_zone_options, id='breaker')),
+                dcc.Slider(0, 2, step=1, value=0,
+                           marks={key: {'label': val, 'style': {'color': colors['slider_mark']}} for key, val in breaker_zone_options.items()},
+                           id='breaker', style={'padding': '5px 20px 0'})),
             create_input_section("3. Percentual de Areia Fina",
-                dcc.Slider(0, 2, step=1, value=0, marks=fine_sand_options, id='fine')),
+                dcc.Slider(0, 2, step=1, value=0,
+                           marks={key: {'label': val, 'style': {'color': colors['slider_mark']}} for key, val in fine_sand_options.items()},
+                           id='fine', style={'padding': '5px 20px 0'})),
             html.Div([
                 html.H4("4. Morfologia e Sedimento", style={"marginTop": "20px"}),
                 create_input_section("4a. Tamanho do Grão (mm)",
@@ -95,7 +102,9 @@ app.layout = html.Div([
                     dcc.Dropdown(list(grain_table[">710"].keys()), "1/20", id='slope', clearable=False)),
             ], style={"background": "#3c3c3c", "padding": "15px", "borderRadius": "5px"}),
             create_input_section("5. Profundidade da Camada Redox (RPD)",
-                dcc.Slider(0, 4, step=1, value=0, marks=redox_options, id='redox')),
+                dcc.Slider(0, 4, step=1, value=0,
+                           marks={key: {'label': val, 'style': {'color': colors['slider_mark']}} for key, val in redox_options.items()},
+                           id='redox', style={'padding': '5px 20px 0'})),
             create_input_section("6. Organismos Tubícolas",
                 dcc.RadioItems(id='tubicola', options=[{'label': 'Presentes', 'value': 'Presentes'}, {'label': 'Ausentes', 'value': 'Ausentes'}], value='Presentes',
                                labelStyle={'display': 'inline-block', 'marginRight': '20px'})),
@@ -176,3 +185,5 @@ def update_output(wave, breaker, fine, grain, slope, redox, tubicola):
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8050))
     app.run(host="0.0.0.0", port=port, debug=True)
+
+
