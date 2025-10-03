@@ -100,7 +100,7 @@ app.layout = html.Div([
                     dcc.Dropdown(list(grain_table.keys()), "250-350", id='grain', clearable=False)),
                 create_input_section("4b. Inclinação da Praia",
                     dcc.Dropdown(list(grain_table[">710"].keys()), "1/20", id='slope', clearable=False)),
-            ], style={"background": "#3c3c3c", "padding": "15px", "borderRadius": "5px"}),
+            ], style={"background": "#3c3c3c", "padding": "15px", "borderRadius": "5px", "color": "black"}),
             create_input_section("5. Profundidade da Camada Redox (RPD)",
                 html.Div(dcc.Slider(0, 4, step=1, value=0,
                            marks={key: {'label': val, 'style': {'color': colors['slider_mark']}} for key, val in redox_options.items()},
