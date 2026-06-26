@@ -26,29 +26,51 @@ redox_options = {0: "0–10 cm", 1: "10–25 cm", 2: "25–50 cm", 3: "50–80 c
 
 def classificar_praia(escore):
     if escore <= 5:
-        return "Refletiva (Muito Protegida)"
+        return "Muito Protegida"
     elif escore <= 10:
-        return "Intermediária (Protegida)"
-    elif escore <= 15:
-        return "Dissipativa (Exposta)"
-    else:
-        return "Muito Dissipativa (Muito Exposta)"
-
-def classificar_por_posicao(slope_x, grain_mm):
-    """Classifica com base na posição no gráfico usando as curvas."""
-    d = grain_mm
-    slope_protegida     = 3.1  * d**-1.1
-    slope_mod_protegida = 2.1  * d**-1.8
-    slope_exposta       = 3.9  * d**-1.85
-
-    if slope_x <= slope_protegida:
         return "Protegida"
-    elif slope_x <= slope_mod_protegida:
-        return "Moderadamente Protegida"
-    elif slope_x <= slope_exposta:
+    elif escore <= 15:
         return "Exposta"
     else:
-        return "Fora das curvas classificadas"
+        return "Muito Exposta"
+
+def classificar_por_posicao(slope_x, grain_mm):
+    """Classifica com base na região entre curvas no gráfico.
+    
+    As três curvas delimitam quatro regiões:
+      x < curva_protegida                          → Muito Protegida
+      curva_protegida ≤ x < curva_mod_protegida    → Protegida
+      curva_mod_protegida ≤ x < curva_exposta      → Exposta
+      x ≥ curva_exposta                            → Muito Exposta
+    
+    Pontos exatamente sobre uma curva são tratados como
+    limítrofes entre as duas regiões adjacentes.
+    """
+    d = grain_mm
+    x_muito_protegida   = 3.1  * d**-1.1
+    x_protegida         = 2.1  * d**-1.8
+    x_exposta           = 3.9  * d**-1.85
+
+    # Tolerância para considerar um ponto "sobre" a curva (±2%)
+    tol = 0.02
+
+    def sobre_curva(x, x_curva):
+        return abs(x - x_curva) / x_curva <= tol
+
+    if sobre_curva(slope_x, x_muito_protegida):
+        return "Fronteira: Muito Protegida / Protegida"
+    elif sobre_curva(slope_x, x_protegida):
+        return "Fronteira: Protegida / Exposta"
+    elif sobre_curva(slope_x, x_exposta):
+        return "Fronteira: Exposta / Muito Exposta"
+    elif slope_x < x_muito_protegida:
+        return "Muito Protegida"
+    elif slope_x < x_protegida:
+        return "Protegida"
+    elif slope_x < x_exposta:
+        return "Exposta"
+    else:
+        return "Muito Exposta"
 
 # --- APP ---
 app = Dash(__name__)
@@ -200,14 +222,14 @@ app.layout = html.Div([
                                     ], style={"backgroundColor": "#3a3a3a"})),
                                     html.Tbody([
                                         html.Tr([html.Td("0 – 5",  style={"padding": "6px 16px", "textAlign": "center"}),
-                                                 html.Td("Refletiva (Muito Protegida)")]),
+                                                 html.Td("Muito Protegida")]),
                                         html.Tr([html.Td("6 – 10", style={"padding": "6px 16px", "textAlign": "center"}),
-                                                 html.Td("Intermediária (Protegida)")],
+                                                 html.Td("Protegida")],
                                                 style={"backgroundColor": "#2a2a2a"}),
                                         html.Tr([html.Td("11 – 15", style={"padding": "6px 16px", "textAlign": "center"}),
-                                                 html.Td("Dissipativa (Exposta)")]),
+                                                 html.Td("Exposta")]),
                                         html.Tr([html.Td("> 15",   style={"padding": "6px 16px", "textAlign": "center"}),
-                                                 html.Td("Muito Dissipativa (Muito Exposta)")],
+                                                 html.Td("Muito Exposta")],
                                                 style={"backgroundColor": "#2a2a2a"}),
                                     ])
                                 ], style={
@@ -407,11 +429,26 @@ def update_graph(slope_x, grain_mm):
     classification_text = html.Span("Insira os valores para ver a classificação.",
                                     style={"color": "#999"})
 
+    # Limites do domínio visível do gráfico
+    X_MIN, X_MAX = 5, 150
+    D_MIN, D_MAX = 0.06, 1.5
+
+    # Cores por classificação
+    class_colors = {
+        "Muito Protegida": "#33C3F0",
+        "Protegida": "#39E991",
+        "Exposta": "#E9A039",
+        "Muito Exposta": "#E95D39",
+    }
+
     if slope_x is not None and grain_mm is not None:
         try:
             sx = float(slope_x)
             gm = float(grain_mm)
             if sx > 0 and gm > 0:
+                # Verifica se está dentro do domínio do gráfico
+                fora_dominio = sx < X_MIN or sx > X_MAX or gm < D_MIN or gm > D_MAX
+
                 fig.add_trace(go.Scatter(
                     x=[sx], y=[gm],
                     mode='markers',
@@ -419,13 +456,30 @@ def update_graph(slope_x, grain_mm):
                     marker=dict(color='#FFD700', size=16, symbol='star',
                                 line=dict(color='white', width=1))
                 ))
-                tipo = classificar_por_posicao(sx, gm)
-                classification_text = [
-                    html.Div("Classificação pelo Gráfico", style={"fontWeight": "bold", "marginBottom": "6px"}),
-                    html.Div(tipo, style={"fontSize": "1.2em", "color": colors['accent']}),
-                    html.Div(f"Inclinação 1:{sx}  |  Grão {gm} mm",
-                             style={"fontSize": "0.85em", "color": "#999", "marginTop": "6px"}),
-                ]
+
+                if fora_dominio:
+                    classification_text = [
+                        html.Div("⚠️ Ponto fora do domínio do gráfico",
+                                 style={"fontWeight": "bold", "color": "#E9A039", "marginBottom": "6px"}),
+                        html.Div(
+                            f"Os valores inseridos (1:{sx}, {gm} mm) estão fora da janela representada "
+                            f"(inclinação 1:{X_MIN}–1:{X_MAX}, grão {D_MIN}–{D_MAX} mm). "
+                            "Tente valores dentro desses limites.",
+                            style={"fontSize": "0.88em", "color": "#BBBBBB", "lineHeight": "1.5"}
+                        ),
+                    ]
+                else:
+                    tipo = classificar_por_posicao(sx, gm)
+                    # Determina cor: para fronteiras usa amarelo, para regiões usa a cor da classe
+                    is_fronteira = tipo.startswith("Fronteira")
+                    card_color = "#FFD700" if is_fronteira else class_colors.get(tipo, colors['accent'])
+                    classification_text = [
+                        html.Div("Classificação pelo Gráfico",
+                                 style={"fontWeight": "bold", "marginBottom": "6px"}),
+                        html.Div(tipo, style={"fontSize": "1.2em", "color": card_color}),
+                        html.Div(f"Inclinação 1:{sx}  |  Grão {gm} mm",
+                                 style={"fontSize": "0.85em", "color": "#999", "marginTop": "6px"}),
+                    ]
         except (ValueError, TypeError):
             pass
 
