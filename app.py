@@ -1,11 +1,10 @@
-from dash import Dash, dcc, html, Input, Output
+from dash import Dash, dcc, html, Input, Output, State
 import plotly.graph_objects as go
 import numpy as np
 import os
 
 # --- DADOS E FUNÇÕES DE CLASSIFICAÇÃO ---
 
-# Tabela de pontuação para o tamanho do grão e inclinação
 grain_table = {
     ">710": {"1/5": 7, "1/10": 6, "1/20": 5, "1/25": 4, "1/50": 3},
     "500-710": {"1/5": 6, "1/10": 5, "1/20": 4, "1/25": 3, "1/50": 2},
@@ -15,20 +14,17 @@ grain_table = {
     "<180": {"1/5": 2, "1/10": 1, "1/20": 0, "1/25": 0, "1/50": 0},
 }
 
-# Mapeamento para valores numéricos do diâmetro do grão para o gráfico
 grain_numerical_map = {
     ">710": 0.71, "500-710": 0.6, "350-500": 0.43,
     "250-350": 0.3, "180-250": 0.215, "<180": 0.15
 }
 
-# Opções para os componentes de entrada
 wave_action_options = {0: "Praticamente ausente", 1: "Fraca", 2: "Moderada", 3: "Forte", 4: "Extremamente forte (>1,5m)"}
 breaker_zone_options = {0: "Muito larga, quebra em bancos", 1: "Média", 2: "Quebra na face da praia"}
 fine_sand_options = {0: "5%", 1: "2–3%", 2: "<1%"}
 redox_options = {0: "0–10 cm", 1: "10–25 cm", 2: "25–50 cm", 3: "50–80 cm", 4: ">80 cm"}
 
 def classificar_praia(escore):
-    """Classifica o tipo de praia com base na pontuação total."""
     if escore <= 5:
         return "Refletiva (Muito Protegida)"
     elif escore <= 10:
@@ -38,21 +34,35 @@ def classificar_praia(escore):
     else:
         return "Muito Dissipativa (Muito Exposta)"
 
-# --- INICIALIZAÇÃO DO APP DASH ---
+def classificar_por_posicao(slope_x, grain_mm):
+    """Classifica com base na posição no gráfico usando as curvas."""
+    d = grain_mm
+    slope_protegida     = 3.1  * d**-1.1
+    slope_mod_protegida = 2.1  * d**-1.8
+    slope_exposta       = 3.9  * d**-1.85
+
+    if slope_x <= slope_protegida:
+        return "Protegida"
+    elif slope_x <= slope_mod_protegida:
+        return "Moderadamente Protegida"
+    elif slope_x <= slope_exposta:
+        return "Exposta"
+    else:
+        return "Fora das curvas classificadas"
+
+# --- APP ---
 app = Dash(__name__)
 server = app.server
 
-# --- ESTILOS DO TEMA ESCURO ---
 colors = {
     'background': '#1E1E1E',
     'text': '#EAEAEA',
     'container': '#2D2D2D',
     'accent': '#4491D3',
     'border': '#444444',
-    'slider_mark': '#CCCCCC'  # Cor para as legendas do slider
+    'slider_mark': '#CCCCCC',
 }
 
-# Estilo para o container principal
 main_style = {
     "backgroundColor": colors['background'],
     "color": colors['text'],
@@ -60,132 +70,382 @@ main_style = {
     "maxWidth": "1400px",
     "margin": "40px auto",
     "padding": "30px",
+    "minHeight": "100vh",
 }
 
-# Função auxiliar para criar seções de input com espaçamento
-def create_input_section(label, component):
-    children = [html.Label(label, style={"fontWeight": "bold"})]
-    children.append(component)
-    return html.Div(children, style={"marginBottom": "25px"})
+tab_style = {
+    "backgroundColor": colors['container'],
+    "color": colors['text'],
+    "border": f"1px solid {colors['border']}",
+    "padding": "10px 20px",
+    "borderRadius": "5px 5px 0 0",
+}
 
-# --- LAYOUT DO APLICATIVO ---
+tab_selected_style = {
+    "backgroundColor": colors['accent'],
+    "color": "#FFFFFF",
+    "border": f"1px solid {colors['accent']}",
+    "padding": "10px 20px",
+    "borderRadius": "5px 5px 0 0",
+    "fontWeight": "bold",
+}
+
+def create_input_section(label, component):
+    return html.Div([
+        html.Label(label, style={"fontWeight": "bold"}),
+        component
+    ], style={"marginBottom": "25px"})
+
+# --- LAYOUT ---
 app.layout = html.Div([
-    html.H1("Simulador Interativo: Classificação de Praias Arenosas", style={"textAlign": "center", "color": colors['accent']}),
+    html.H1(
+        "Simulador Interativo: Classificação de Praias Arenosas",
+        style={"textAlign": "center", "color": colors['accent'], "marginBottom": "8px"}
+    ),
     html.P(
-        "Esta ferramenta classifica o estado morfodinâmico de praias arenosas com base em parâmetros físicos e biológicos. "
-        "Ajuste os valores abaixo para ver como eles influenciam a pontuação e o tipo de praia.",
-        style={"textAlign": "center", "marginBottom": "40px"}
+        "Esta ferramenta classifica o estado morfodinâmico de praias arenosas com base em parâmetros físicos e biológicos.",
+        style={"textAlign": "center", "marginBottom": "30px", "color": "#BBBBBB"}
     ),
 
-    # Container para o layout de duas colunas
-    html.Div([
-        # Coluna da Esquerda: Controles
-        html.Div([
-            html.H3("Parâmetros de Entrada", style={"borderBottom": f"1px solid {colors['border']}", "paddingBottom": "10px"}),
-            create_input_section("1. Ação de Ondas",
-                html.Div(dcc.Slider(0, 4, step=1, value=0,
-                           marks={key: {'label': val, 'style': {'color': colors['slider_mark']}} for key, val in wave_action_options.items()},
-                           id='wave'), style={'padding': '5px 20px 0'})),
-            create_input_section("2. Zona de Arrebentação",
-                html.Div(dcc.Slider(0, 2, step=1, value=0,
-                           marks={key: {'label': val, 'style': {'color': colors['slider_mark']}} for key, val in breaker_zone_options.items()},
-                           id='breaker'), style={'padding': '5px 20px 0'})),
-            create_input_section("3. Percentual de Areia Fina",
-                html.Div(dcc.Slider(0, 2, step=1, value=0,
-                           marks={key: {'label': val, 'style': {'color': colors['slider_mark']}} for key, val in fine_sand_options.items()},
-                           id='fine'), style={'padding': '5px 20px 0'})),
-            html.Div([
-                html.H4("4. Morfologia e Sedimento", style={"marginTop": "20px"}),
-                create_input_section("4a. Tamanho do Grão (mm)",
-                    dcc.Dropdown(list(grain_table.keys()), "250-350", id='grain', clearable=False, style={'color': 'black'})),
-                create_input_section("4b. Inclinação da Praia",
-                    dcc.Dropdown(list(grain_table[">710"].keys()), "1/20", id='slope', clearable=False, style={'color': 'black'})),
-            ], style={"background": "#3c3c3c", "padding": "15px", "borderRadius": "5px"}),
-            create_input_section("5. Profundidade da Camada Redox (RPD)",
-                html.Div(dcc.Slider(0, 4, step=1, value=0,
-                           marks={key: {'label': val, 'style': {'color': colors['slider_mark']}} for key, val in redox_options.items()},
-                           id='redox'), style={'padding': '5px 20px 0'})),
-            create_input_section("6. Organismos Tubícolas",
-                dcc.RadioItems(id='tubicola', options=[{'label': 'Presentes', 'value': 'Presentes'}, {'label': 'Ausentes', 'value': 'Ausentes'}], value='Presentes',
-                               labelStyle={'display': 'inline-block', 'marginRight': '20px'})),
-        ], style={
-            'flex': '1', 'minWidth': '450px', 'padding': '25px',
-            'backgroundColor': colors['container'], 'borderRadius': '10px', 'border': f"1px solid {colors['border']}"
-        }),
+    dcc.Tabs(
+        id="tabs",
+        value="tab-escore",
+        children=[
+            # ── ABA 1: ESCORE ────────────────────────────────────────────
+            dcc.Tab(
+                label="📋 Parâmetros & Escore",
+                value="tab-escore",
+                style=tab_style,
+                selected_style=tab_selected_style,
+                children=[
+                    html.Div([
+                        # Coluna esquerda — inputs
+                        html.Div([
+                            html.H3("Parâmetros de Entrada", style={
+                                "borderBottom": f"1px solid {colors['border']}",
+                                "paddingBottom": "10px"
+                            }),
 
-        # Coluna da Direita: Resultados e Gráfico
-        html.Div([
-            html.Div(id='output-div', style={
-                "padding": "20px", "background": colors['accent'], "color": "#FFFFFF", "borderRadius": "10px",
-                "textAlign": "center", "fontSize": "1.3em", "marginBottom": "20px", "fontWeight": "bold"
-            }),
-            dcc.Graph(id='morpho-graph', style={'height': '80vh'})
-        ], style={'flex': '1.5', 'paddingLeft': '30px'})
+                            create_input_section("1. Ação de Ondas",
+                                html.Div(dcc.Slider(0, 4, step=1, value=0,
+                                    marks={k: {'label': v, 'style': {'color': colors['slider_mark']}}
+                                           for k, v in wave_action_options.items()},
+                                    id='wave'), style={'padding': '5px 20px 0'})),
 
-    ], style={'display': 'flex', 'flexDirection': 'row', 'gap': '30px'})
+                            create_input_section("2. Zona de Arrebentação",
+                                html.Div(dcc.Slider(0, 2, step=1, value=0,
+                                    marks={k: {'label': v, 'style': {'color': colors['slider_mark']}}
+                                           for k, v in breaker_zone_options.items()},
+                                    id='breaker'), style={'padding': '5px 20px 0'})),
+
+                            create_input_section("3. Percentual de Areia Fina",
+                                html.Div(dcc.Slider(0, 2, step=1, value=0,
+                                    marks={k: {'label': v, 'style': {'color': colors['slider_mark']}}
+                                           for k, v in fine_sand_options.items()},
+                                    id='fine'), style={'padding': '5px 20px 0'})),
+
+                            html.Div([
+                                html.H4("4. Morfologia e Sedimento", style={"marginTop": "20px"}),
+                                create_input_section("4a. Tamanho do Grão (mm)",
+                                    dcc.Dropdown(list(grain_table.keys()), "250-350", id='grain',
+                                                 clearable=False, style={'color': 'black'})),
+                                create_input_section("4b. Inclinação da Praia",
+                                    dcc.Dropdown(list(grain_table[">710"].keys()), "1/20", id='slope',
+                                                 clearable=False, style={'color': 'black'})),
+                            ], style={"background": "#3c3c3c", "padding": "15px", "borderRadius": "5px"}),
+
+                            create_input_section("5. Profundidade da Camada Redox (RPD)",
+                                html.Div(dcc.Slider(0, 4, step=1, value=0,
+                                    marks={k: {'label': v, 'style': {'color': colors['slider_mark']}}
+                                           for k, v in redox_options.items()},
+                                    id='redox'), style={'padding': '5px 20px 0'})),
+
+                            create_input_section("6. Organismos Tubícolas",
+                                dcc.RadioItems(
+                                    id='tubicola',
+                                    options=[
+                                        {'label': 'Presentes', 'value': 'Presentes'},
+                                        {'label': 'Ausentes',  'value': 'Ausentes'}
+                                    ],
+                                    value='Presentes',
+                                    labelStyle={'display': 'inline-block', 'marginRight': '20px'}
+                                )),
+                        ], style={
+                            'flex': '1', 'minWidth': '450px', 'padding': '25px',
+                            'backgroundColor': colors['container'],
+                            'borderRadius': '0 10px 10px 10px',
+                            'border': f"1px solid {colors['border']}"
+                        }),
+
+                        # Coluna direita — resultado
+                        html.Div([
+                            html.Div(id='output-div', style={
+                                "padding": "25px",
+                                "background": colors['accent'],
+                                "color": "#FFFFFF",
+                                "borderRadius": "10px",
+                                "textAlign": "center",
+                                "fontSize": "1.3em",
+                                "fontWeight": "bold",
+                                "marginBottom": "20px",
+                            }),
+
+                            # Tabela de referência de pontuações
+                            html.Div([
+                                html.H4("Tabela de Classificação", style={"marginBottom": "12px"}),
+                                html.Table([
+                                    html.Thead(html.Tr([
+                                        html.Th("Escore", style={"padding": "8px 16px"}),
+                                        html.Th("Tipo de Praia", style={"padding": "8px 16px"}),
+                                    ], style={"backgroundColor": "#3a3a3a"})),
+                                    html.Tbody([
+                                        html.Tr([html.Td("0 – 5",  style={"padding": "6px 16px", "textAlign": "center"}),
+                                                 html.Td("Refletiva (Muito Protegida)")]),
+                                        html.Tr([html.Td("6 – 10", style={"padding": "6px 16px", "textAlign": "center"}),
+                                                 html.Td("Intermediária (Protegida)")],
+                                                style={"backgroundColor": "#2a2a2a"}),
+                                        html.Tr([html.Td("11 – 15", style={"padding": "6px 16px", "textAlign": "center"}),
+                                                 html.Td("Dissipativa (Exposta)")]),
+                                        html.Tr([html.Td("> 15",   style={"padding": "6px 16px", "textAlign": "center"}),
+                                                 html.Td("Muito Dissipativa (Muito Exposta)")],
+                                                style={"backgroundColor": "#2a2a2a"}),
+                                    ])
+                                ], style={
+                                    "width": "100%", "borderCollapse": "collapse",
+                                    "border": f"1px solid {colors['border']}", "borderRadius": "8px",
+                                    "overflow": "hidden"
+                                })
+                            ], style={
+                                "padding": "20px", "backgroundColor": colors['container'],
+                                "borderRadius": "10px", "border": f"1px solid {colors['border']}"
+                            }),
+                        ], style={'flex': '1', 'paddingLeft': '30px'}),
+
+                    ], style={'display': 'flex', 'flexDirection': 'row', 'gap': '30px', 'marginTop': '20px'}),
+                ]
+            ),
+
+            # ── ABA 2: GRÁFICO ───────────────────────────────────────────
+            dcc.Tab(
+                label="📈 Gráfico Morfodinâmico",
+                value="tab-grafico",
+                style=tab_style,
+                selected_style=tab_selected_style,
+                children=[
+                    html.Div([
+                        # Painel de inputs livres
+                        html.Div([
+                            html.H3("Insira os Valores", style={
+                                "borderBottom": f"1px solid {colors['border']}",
+                                "paddingBottom": "10px"
+                            }),
+
+                            html.P(
+                                "Digite valores contínuos para posicionar o marcador no gráfico e identificar "
+                                "em qual região morfodinâmica a praia se encontra.",
+                                style={"color": "#BBBBBB", "marginBottom": "25px", "lineHeight": "1.6"}
+                            ),
+
+                            html.Div([
+                                html.Label("Inclinação da Praia — valor de x em 1:x",
+                                           style={"fontWeight": "bold", "display": "block", "marginBottom": "6px"}),
+                                html.Span("Ex: digite 20 para representar inclinação 1:20",
+                                          style={"fontSize": "0.85em", "color": "#999", "display": "block", "marginBottom": "8px"}),
+                                dcc.Input(
+                                    id='slope-input',
+                                    type='number',
+                                    placeholder='Ex: 20',
+                                    min=5, max=200, step=0.1,
+                                    style={
+                                        "width": "100%", "padding": "10px", "fontSize": "1.1em",
+                                        "backgroundColor": "#3c3c3c", "color": colors['text'],
+                                        "border": f"1px solid {colors['border']}", "borderRadius": "6px",
+                                        "boxSizing": "border-box"
+                                    }
+                                ),
+                            ], style={"marginBottom": "25px"}),
+
+                            html.Div([
+                                html.Label("Diâmetro Médio do Grão (mm)",
+                                           style={"fontWeight": "bold", "display": "block", "marginBottom": "6px"}),
+                                html.Span("Ex: 0.35 para areia média",
+                                          style={"fontSize": "0.85em", "color": "#999", "display": "block", "marginBottom": "8px"}),
+                                dcc.Input(
+                                    id='grain-input',
+                                    type='number',
+                                    placeholder='Ex: 0.35',
+                                    min=0.06, max=2.0, step=0.01,
+                                    style={
+                                        "width": "100%", "padding": "10px", "fontSize": "1.1em",
+                                        "backgroundColor": "#3c3c3c", "color": colors['text'],
+                                        "border": f"1px solid {colors['border']}", "borderRadius": "6px",
+                                        "boxSizing": "border-box"
+                                    }
+                                ),
+                            ], style={"marginBottom": "30px"}),
+
+                            # Card de resultado da classificação pelo gráfico
+                            html.Div(id='graph-classification', style={
+                                "padding": "18px",
+                                "background": "#3c3c3c",
+                                "borderRadius": "8px",
+                                "border": f"1px solid {colors['border']}",
+                                "textAlign": "center",
+                                "fontSize": "1.05em",
+                                "minHeight": "60px",
+                                "display": "flex",
+                                "alignItems": "center",
+                                "justifyContent": "center",
+                            }),
+
+                            # Referência de tamanho de grão
+                            html.Div([
+                                html.H4("Referência: Escala de Wentworth", style={"marginBottom": "10px"}),
+                                html.Table([
+                                    html.Thead(html.Tr([
+                                        html.Th("Diâmetro (mm)", style={"padding": "6px 12px"}),
+                                        html.Th("Classificação",  style={"padding": "6px 12px"}),
+                                    ], style={"backgroundColor": "#3a3a3a"})),
+                                    html.Tbody([
+                                        html.Tr([html.Td("> 0,710", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia grossa")]),
+                                        html.Tr([html.Td("0,500 – 0,710", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia grossa-média")], style={"backgroundColor": "#2a2a2a"}),
+                                        html.Tr([html.Td("0,350 – 0,500", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia média")]),
+                                        html.Tr([html.Td("0,250 – 0,350", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia média-fina")], style={"backgroundColor": "#2a2a2a"}),
+                                        html.Tr([html.Td("0,180 – 0,250", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia fina")]),
+                                        html.Tr([html.Td("< 0,180", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia muito fina")], style={"backgroundColor": "#2a2a2a"}),
+                                    ])
+                                ], style={
+                                    "width": "100%", "borderCollapse": "collapse",
+                                    "border": f"1px solid {colors['border']}", "fontSize": "0.88em"
+                                })
+                            ], style={
+                                "marginTop": "30px", "padding": "15px",
+                                "backgroundColor": colors['container'],
+                                "borderRadius": "8px", "border": f"1px solid {colors['border']}"
+                            }),
+
+                        ], style={
+                            'flex': '1', 'minWidth': '320px', 'maxWidth': '400px',
+                            'padding': '25px', 'backgroundColor': colors['container'],
+                            'borderRadius': '0 10px 10px 10px',
+                            'border': f"1px solid {colors['border']}"
+                        }),
+
+                        # Gráfico
+                        html.Div([
+                            dcc.Graph(id='morpho-graph', style={'height': '80vh'})
+                        ], style={'flex': '2', 'paddingLeft': '30px'}),
+
+                    ], style={'display': 'flex', 'flexDirection': 'row', 'gap': '30px', 'marginTop': '20px'}),
+                ]
+            ),
+        ],
+        style={"marginBottom": "0"},
+        colors={"border": colors['border'], "primary": colors['accent'], "background": colors['background']},
+    ),
 
 ], style=main_style)
 
-# --- CALLBACKS ---
+
+# --- CALLBACK: ABA ESCORE ---
 @app.callback(
     Output('output-div', 'children'),
-    Output('morpho-graph', 'figure'),
     [Input(i, 'value') for i in ['wave', 'breaker', 'fine', 'grain', 'slope', 'redox', 'tubicola']]
 )
-def update_output(wave, breaker, fine, grain, slope, redox, tubicola):
-    # --- Cálculo da Pontuação ---
+def update_escore(wave, breaker, fine, grain, slope, redox, tubicola):
     score4 = grain_table.get(grain, {}).get(slope, 0)
     tubicola_score = 1 if tubicola == 'Ausentes' else 0
     total_score = wave + breaker + fine + score4 + redox + tubicola_score
     tipo_praia = classificar_praia(total_score)
-    
-    # --- Geração do Gráfico ---
+
+    return [
+        html.Div(f"Escore Total: {total_score}", style={"fontSize": "1.4em", "marginBottom": "8px"}),
+        html.Div(f"Tipo de Praia: {tipo_praia}", style={"fontSize": "1.1em", "opacity": "0.9"}),
+    ]
+
+
+# --- CALLBACK: ABA GRÁFICO ---
+@app.callback(
+    Output('morpho-graph', 'figure'),
+    Output('graph-classification', 'children'),
+    Input('slope-input', 'value'),
+    Input('grain-input', 'value'),
+)
+def update_graph(slope_x, grain_mm):
     fig = go.Figure()
-    d_range = np.linspace(0.1, 1.0, 300)
+    d_range = np.linspace(0.06, 1.5, 500)
 
     curves = {
-        "Protegida": {"func": lambda d: 3.1 * d**-1.1, "color": "#33C3F0", "formula": "x = 3,1·d⁻¹·¹"},
-        "Moderadamente Protegida": {"func": lambda d: 2.1 * d**-1.8, "color": "#39E991", "formula": "x = 2,1·d⁻¹·⁸"},
-        "Exposta": {"func": lambda d: 3.9 * d**-1.85, "color": "#E95D39", "formula": "x = 3,9·d⁻¹·⁸⁵"}
+        "Protegida": {
+            "func": lambda d: 3.1 * d**-1.1,
+            "color": "#33C3F0",
+            "formula": "x = 3,1·d⁻¹·¹"
+        },
+        "Moderadamente Protegida": {
+            "func": lambda d: 2.1 * d**-1.8,
+            "color": "#39E991",
+            "formula": "x = 2,1·d⁻¹·⁸"
+        },
+        "Exposta": {
+            "func": lambda d: 3.9 * d**-1.85,
+            "color": "#E95D39",
+            "formula": "x = 3,9·d⁻¹·⁸⁵"
+        },
     }
 
     for name, props in curves.items():
-        x = props["func"](d_range)
-        mask = (x >= 5) & (x <= 100)
-        fig.add_trace(go.Scatter(x=x[mask], y=d_range[mask], mode='lines', name=f'{name} ({props["formula"]})', line=dict(color=props["color"])))
+        x_vals = props["func"](d_range)
+        mask = (x_vals >= 5) & (x_vals <= 200)
+        fig.add_trace(go.Scatter(
+            x=x_vals[mask], y=d_range[mask],
+            mode='lines',
+            name=f'{name} ({props["formula"]})',
+            line=dict(color=props["color"], width=2)
+        ))
 
-    try:
-        slope_val_inv = 1 / eval(slope)
-        grain_val = grain_numerical_map.get(grain, 0)
-        if 5 <= slope_val_inv <= 100 and 0.1 <= grain_val <= 1.0:
-            fig.add_trace(go.Scatter(x=[slope_val_inv], y=[grain_val], mode='markers', name='Sua Seleção', marker=dict(color=colors['text'], size=14, symbol='star')))
-    except (SyntaxError, ZeroDivisionError, TypeError):
-        pass
+    # Marcador do aluno
+    classification_text = html.Span("Insira os valores para ver a classificação.",
+                                    style={"color": "#999"})
+
+    if slope_x is not None and grain_mm is not None:
+        try:
+            sx = float(slope_x)
+            gm = float(grain_mm)
+            if sx > 0 and gm > 0:
+                fig.add_trace(go.Scatter(
+                    x=[sx], y=[gm],
+                    mode='markers',
+                    name='Sua Seleção',
+                    marker=dict(color='#FFD700', size=16, symbol='star',
+                                line=dict(color='white', width=1))
+                ))
+                tipo = classificar_por_posicao(sx, gm)
+                classification_text = [
+                    html.Div("Classificação pelo Gráfico", style={"fontWeight": "bold", "marginBottom": "6px"}),
+                    html.Div(tipo, style={"fontSize": "1.2em", "color": colors['accent']}),
+                    html.Div(f"Inclinação 1:{sx}  |  Grão {gm} mm",
+                             style={"fontSize": "0.85em", "color": "#999", "marginTop": "6px"}),
+                ]
+        except (ValueError, TypeError):
+            pass
 
     fig.update_layout(
         title="Classificação Morfodinâmica da Praia",
         xaxis_title="Inclinação da Praia (1:x)",
         yaxis_title="Diâmetro Médio do Grão (mm)",
-        xaxis=dict(range=[5, 100]),
-        yaxis=dict(range=[0.1, 1.0]),
+        xaxis=dict(range=[5, 150], title_font=dict(size=13)),
+        yaxis=dict(range=[0.06, 1.5], title_font=dict(size=13)),
         legend=dict(font=dict(size=10), yanchor="top", y=0.99, xanchor="right", x=0.99),
-        margin=dict(l=40, r=40, t=40, b=40),
-        template='plotly_dark'
+        margin=dict(l=50, r=40, t=50, b=50),
+        template='plotly_dark',
+        plot_bgcolor='#1a1a2e',
+        paper_bgcolor='#1E1E1E',
     )
-    
-    output_text = [
-        html.Span(f"Escore Total: {total_score}"),
-        html.Span(" → ", style={"margin": "0 10px"}),
-        html.Span(f"Tipo de Praia: {tipo_praia}")
-    ]
 
-    return output_text, fig
+    return fig, classification_text
 
-# --- EXECUÇÃO DO SERVIDOR ---
+
+# --- EXECUÇÃO ---
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8050))
     app.run(host="0.0.0.0", port=port, debug=True)
-
-
-
-
