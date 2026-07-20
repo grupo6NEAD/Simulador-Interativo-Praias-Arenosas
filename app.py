@@ -34,43 +34,57 @@ def classificar_praia(escore):
     else:
         return "Muito Exposta"
 
+# Definição única das três curvas de referência (usada tanto na classificação
+# quanto na plotagem), para manter os dois pontos do código sempre consistentes.
+# Existem apenas três classificações possíveis na aba do gráfico — uma para
+# cada curva. O ponto pertence à classe da curva que estiver geometricamente
+# mais próxima dele (não há categorias "Muito Protegida" / "Muito Exposta"
+# nesta aba).
+CURVAS_REFERENCIA = [
+    {"nome": "Protegida",               "coef": 3.1, "expo": -1.1},
+    {"nome": "Moderadamente Protegida", "coef": 2.1, "expo": -1.8},
+    {"nome": "Exposta",                 "coef": 3.9, "expo": -1.85},
+]
+
+# Domínio visível do gráfico (usado para normalizar a distância entre eixos
+# com escalas muito diferentes: x ~ [5,150] vs d ~ [0.06,1.5]).
+GRAPH_X_MIN, GRAPH_X_MAX = 5, 150
+GRAPH_D_MIN, GRAPH_D_MAX = 0.06, 1.5
+
+
+def _curve_x(d, coef, expo):
+    return coef * np.asarray(d, dtype=float) ** expo
+
+
 def classificar_por_posicao(slope_x, grain_mm):
-    """Classifica com base na região entre curvas no gráfico.
-    
-    As três curvas delimitam quatro regiões:
-      x < curva_protegida                          → Muito Protegida
-      curva_protegida ≤ x < curva_mod_protegida    → Protegida
-      curva_mod_protegida ≤ x < curva_exposta      → Exposta
-      x ≥ curva_exposta                            → Muito Exposta
-    
-    Pontos exatamente sobre uma curva são tratados como
-    limítrofes entre as duas regiões adjacentes.
+    """Classifica um ponto (slope_x, grain_mm) pela curva de referência
+    geometricamente mais próxima dele.
+
+    Calcula a distância mínima do ponto a cada uma das três curvas,
+    percorrendo-as em toda a extensão do domínio visível do gráfico (as
+    distâncias em x e em d são normalizadas pelos respectivos intervalos
+    dos eixos, já que têm escalas muito diferentes) e retorna o nome da
+    curva mais próxima. Só existem três classificações possíveis:
+    "Protegida", "Moderadamente Protegida" e "Exposta".
     """
-    d = grain_mm
-    x_muito_protegida   = 3.1  * d**-1.1
-    x_protegida         = 2.1  * d**-1.8
-    x_exposta           = 3.9  * d**-1.85
+    d_amostras = np.linspace(GRAPH_D_MIN, GRAPH_D_MAX, 2000)
+    x_range = GRAPH_X_MAX - GRAPH_X_MIN
+    d_range = GRAPH_D_MAX - GRAPH_D_MIN
 
-    # Tolerância para considerar um ponto "sobre" a curva (±2%)
-    tol = 0.02
+    curva_mais_proxima = None
+    menor_distancia = None
 
-    def sobre_curva(x, x_curva):
-        return abs(x - x_curva) / x_curva <= tol
+    for curva in CURVAS_REFERENCIA:
+        x_curva = _curve_x(d_amostras, curva["coef"], curva["expo"])
+        dx = (slope_x - x_curva) / x_range
+        dd = (grain_mm - d_amostras) / d_range
+        distancia_min = np.sqrt(dx**2 + dd**2).min()
 
-    if sobre_curva(slope_x, x_muito_protegida):
-        return "Fronteira: Muito Protegida / Protegida"
-    elif sobre_curva(slope_x, x_protegida):
-        return "Fronteira: Protegida / Exposta"
-    elif sobre_curva(slope_x, x_exposta):
-        return "Fronteira: Exposta / Muito Exposta"
-    elif slope_x < x_muito_protegida:
-        return "Muito Protegida"
-    elif slope_x < x_protegida:
-        return "Protegida"
-    elif slope_x < x_exposta:
-        return "Exposta"
-    else:
-        return "Muito Exposta"
+        if menor_distancia is None or distancia_min < menor_distancia:
+            menor_distancia = distancia_min
+            curva_mais_proxima = curva
+
+    return curva_mais_proxima["nome"]
 
 # --- APP ---
 app = Dash(__name__)
@@ -249,7 +263,7 @@ app.layout = html.Div([
 
             # ── ABA 2: GRÁFICO ───────────────────────────────────────────
             dcc.Tab(
-                label="📈 Gráfico Morfodinâmico",
+                label="📈 Gráfico",
                 value="tab-grafico",
                 style=tab_style,
                 selected_style=tab_selected_style,
@@ -433,12 +447,11 @@ def update_graph(slope_x, grain_mm):
     X_MIN, X_MAX = 5, 150
     D_MIN, D_MAX = 0.06, 1.5
 
-    # Cores por classificação
+    # Cores por classificação — mesmas cores usadas para cada curva no gráfico
     class_colors = {
-        "Muito Protegida": "#33C3F0",
-        "Protegida": "#39E991",
-        "Exposta": "#E9A039",
-        "Muito Exposta": "#E95D39",
+        "Protegida": "#33C3F0",
+        "Moderadamente Protegida": "#39E991",
+        "Exposta": "#E95D39",
     }
 
     if slope_x is not None and grain_mm is not None:
@@ -470,9 +483,7 @@ def update_graph(slope_x, grain_mm):
                     ]
                 else:
                     tipo = classificar_por_posicao(sx, gm)
-                    # Determina cor: para fronteiras usa amarelo, para regiões usa a cor da classe
-                    is_fronteira = tipo.startswith("Fronteira")
-                    card_color = "#FFD700" if is_fronteira else class_colors.get(tipo, colors['accent'])
+                    card_color = class_colors.get(tipo, colors['accent'])
                     classification_text = [
                         html.Div("Classificação pelo Gráfico",
                                  style={"fontWeight": "bold", "marginBottom": "6px"}),
