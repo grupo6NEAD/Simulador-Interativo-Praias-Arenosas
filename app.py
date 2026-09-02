@@ -343,10 +343,10 @@ app.layout = html.Div([
                                         html.Th("Classificação",  style={"padding": "6px 12px"}),
                                     ], style={"backgroundColor": "#3a3a3a"})),
                                     html.Tbody([
-                                        html.Tr([html.Td("> 0,710", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia grossa")]),
-                                        html.Tr([html.Td("0,500 – 0,710", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia grossa-média")], style={"backgroundColor": "#2a2a2a"}),
+                                        html.Tr([html.Td("> 0,710", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia muito grossa")]),
+                                        html.Tr([html.Td("0,500 – 0,710", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia grossa")], style={"backgroundColor": "#2a2a2a"}),
                                         html.Tr([html.Td("0,350 – 0,500", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia média")]),
-                                        html.Tr([html.Td("0,250 – 0,350", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia média-fina")], style={"backgroundColor": "#2a2a2a"}),
+                                        html.Tr([html.Td("0,250 – 0,350", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia média")], style={"backgroundColor": "#2a2a2a"}),
                                         html.Tr([html.Td("0,180 – 0,250", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia fina")]),
                                         html.Tr([html.Td("< 0,180", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia muito fina")], style={"backgroundColor": "#2a2a2a"}),
                                     ])
