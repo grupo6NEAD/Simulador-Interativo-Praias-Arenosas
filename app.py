@@ -336,7 +336,7 @@ app.layout = html.Div([
 
                             # Referência de tamanho de grão
                             html.Div([
-                                html.H4("Referência: Escala de Wentworth", style={"marginBottom": "10px"}),
+                                html.H4("Referência: Escala adaptada de Wentworth com intervalos de meio Ф (Segundo Suguio)", style={"marginBottom": "10px"}),
                                 html.Table([
                                     html.Thead(html.Tr([
                                         html.Th("Diâmetro (mm)", style={"padding": "6px 12px"}),
@@ -346,7 +346,7 @@ app.layout = html.Div([
                                         html.Tr([html.Td("> 0,710", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia muito grossa")]),
                                         html.Tr([html.Td("0,500 – 0,710", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia grossa")], style={"backgroundColor": "#2a2a2a"}),
                                         html.Tr([html.Td("0,350 – 0,500", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia média")]),
-                                        html.Tr([html.Td("0,250 – 0,350", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia média")], style={"backgroundColor": "#2a2a2a"}),
+                                        html.Tr([html.Td("0,250 – 0,350", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia média fina")], style={"backgroundColor": "#2a2a2a"}),
                                         html.Tr([html.Td("0,180 – 0,250", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia fina")]),
                                         html.Tr([html.Td("< 0,180", style={"padding": "5px 12px", "textAlign": "center"}), html.Td("Areia muito fina")], style={"backgroundColor": "#2a2a2a"}),
                                     ])
